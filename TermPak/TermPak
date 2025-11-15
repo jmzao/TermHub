@@ -1,32 +1,73 @@
 #!/bin/bash
 
-# Diretório onde ficam os apps .deb
-APPS_DIR="$PREFIX/TermPak/apps"
+REPO_PATH="$HOME/termhub/apps"
 
-# Função para mostrar status
-status() {
-    if [ -f "$PREFIX/bin/TermPak" ]; then
-        echo "TermPak está instalado ✔"
-    else
-        echo "TermPak não está instalado ✘"
-    fi
-}
+cmd="$1"
+arg="$2"
 
-# Se nenhum argumento for passado, mostra o status
-if [ -z "$1" ]; then
-    status
-    exit 0
-fi
-
-APP_NAME="$1"
-DEB_PATH="$APPS_DIR/$APP_NAME.deb"
-
-# Verifica se o app existe
-if [ ! -f "$DEB_PATH" ]; then
-    echo "App '$APP_NAME' não encontrado em $APPS_DIR"
+if [ -z "$cmd" ]; then
+    echo "Uso:"
+    echo "  TermPak list"
+    echo "  TermPak search <nome>"
+    echo "  TermPak install <app>"
     exit 1
 fi
 
-echo "Instalando $APP_NAME..."
-dpkg -i "$DEB_PATH" || pkg install -f
-echo "Feito."
+# Comando: listar todos apps
+if [ "$cmd" = "list" ]; then
+    echo "Apps disponíveis no TermHub:"
+    for app in "$REPO_PATH"/*; do
+        [ -d "$app" ] || continue
+        appname=$(basename "$app")
+        echo " - $appname"
+    done
+    exit 0
+fi
+
+# Comando: buscar app pelo nome
+if [ "$cmd" = "search" ]; then
+    if [ -z "$arg" ]; then
+        echo "Uso: TermPak search <nome>"
+        exit 1
+    fi
+
+    echo "Resultados para \"$arg\":"
+    for app in "$REPO_PATH"/*; do
+        [ -d "$app" ] || continue
+        appname=$(basename "$app")
+        if echo "$appname" | grep -qi "$arg"; then
+            echo " - $appname"
+        fi
+    done
+    exit 0
+fi
+
+# Comando: instalar app
+if [ "$cmd" = "install" ]; then
+    if [ -z "$arg" ]; then
+        echo "Uso: TermPak install <app>"
+        exit 1
+    fi
+
+    APP_DIR="$REPO_PATH/$arg"
+
+    if [ ! -d "$APP_DIR" ]; then
+        echo "App \"$arg\" não encontrado no TermHub!"
+        exit 1
+    fi
+
+    INSTALLER="$APP_DIR/install.sh"
+
+    if [ ! -f "$INSTALLER" ]; then
+        echo "Instalador não encontrado em $INSTALLER"
+        exit 1
+    fi
+
+    echo "Instalando $arg..."
+    chmod +x "$INSTALLER"
+    bash "$INSTALLER"
+    exit 0
+fi
+
+echo "Comando desconhecido: $cmd"
+echo "Use: TermPak list | search | install"
