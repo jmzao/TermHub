@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# TermPak — Instalador de apps .deb armazenados no TermHub
+REPO="https://raw.githubusercontent.com/jmzao/TermHub/main/apps"
+
+APP="$1"
+
+if [ -z "$APP" ]; then
+    echo "Uso: TermPak <nome-do-app>"
+    echo "Exemplo: TermPak firefox"
+    exit 0
+fi
+
+# Verifica se o app já está instalado
+if dpkg -l | grep -q "^ii  $APP "; then
+    echo "Status: $APP já está instalado."
+else
+    echo "Status: $APP não está instalado."
+fi
+
+# Baixar pacote .deb
+echo "Baixando pacote..."
+curl -L -o "$APP.deb" "$REPO/$APP.deb"
+
+if [ ! -f "$APP.deb" ]; then
+    echo "Erro: app não encontrado no repositório."
+    exit 1
+fi
+
+echo "Instalando..."
+dpkg -i "$APP.deb" || apt -f install -y
+
+echo "Limpando..."
+rm "$APP.deb"
+
+echo "Instalação concluída."
