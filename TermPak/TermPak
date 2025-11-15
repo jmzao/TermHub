@@ -1,73 +1,52 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-REPO_PATH="$HOME/termhub/apps"
+REPO_URL="https://raw.githubusercontent.com/jmzao/termhub/main/apps"
 
-cmd="$1"
-arg="$2"
+case "$1" in
+    list)
+        echo "[✓] Lista de apps disponíveis:"
+        curl -s "$REPO_URL/Packages" | grep "Package:" | cut -d' ' -f2
+        ;;
 
-if [ -z "$cmd" ]; then
-    echo "Uso:"
-    echo "  TermPak list"
-    echo "  TermPak search <nome>"
-    echo "  TermPak install <app>"
-    exit 1
-fi
-
-# Comando: listar todos apps
-if [ "$cmd" = "list" ]; then
-    echo "Apps disponíveis no TermHub:"
-    for app in "$REPO_PATH"/*; do
-        [ -d "$app" ] || continue
-        appname=$(basename "$app")
-        echo " - $appname"
-    done
-    exit 0
-fi
-
-# Comando: buscar app pelo nome
-if [ "$cmd" = "search" ]; then
-    if [ -z "$arg" ]; then
-        echo "Uso: TermPak search <nome>"
-        exit 1
-    fi
-
-    echo "Resultados para \"$arg\":"
-    for app in "$REPO_PATH"/*; do
-        [ -d "$app" ] || continue
-        appname=$(basename "$app")
-        if echo "$appname" | grep -qi "$arg"; then
-            echo " - $appname"
+    search)
+        if [ -z "$2" ]; then
+            echo "Use: TermPak search nome"
+            exit 1
         fi
-    done
-    exit 0
-fi
+        echo "[✓] Resultados da busca:"
+        curl -s "$REPO_URL/Packages" | grep -iA2 "Package: $2"
+        ;;
 
-# Comando: instalar app
-if [ "$cmd" = "install" ]; then
-    if [ -z "$arg" ]; then
-        echo "Uso: TermPak install <app>"
-        exit 1
-    fi
+    install)
+        if [ -z "$2" ]; then
+            echo "Use: TermPak install nome"
+            exit 1
+        fi
 
-    APP_DIR="$REPO_PATH/$arg"
+        PKG="$2"
+        DEB_URL="$REPO_URL/${PKG}.deb"
 
-    if [ ! -d "$APP_DIR" ]; then
-        echo "App \"$arg\" não encontrado no TermHub!"
-        exit 1
-    fi
+        echo "[✓] Baixando $PKG..."
+        wget "$DEB_URL" -O "/sdcard/Download/${PKG}.deb"
 
-    INSTALLER="$APP_DIR/install.sh"
+        if [ $? -ne 0 ]; then
+            echo "Erro: app '$PKG' não encontrado no repositório."
+            exit 1
+        fi
 
-    if [ ! -f "$INSTALLER" ]; then
-        echo "Instalador não encontrado em $INSTALLER"
-        exit 1
-    fi
+        echo "[✓] Instalando..."
+        dpkg -i "/sdcard/Download/${PKG}.deb" || apt -f install -y
 
-    echo "Instalando $arg..."
-    chmod +x "$INSTALLER"
-    bash "$INSTALLER"
-    exit 0
-fi
+        echo "[✓] Instalação concluída!"
+        ;;
 
-echo "Comando desconhecido: $cmd"
-echo "Use: TermPak list | search | install"
+    *)
+        echo "TermPak - Sistema de apps"
+        echo ""
+        echo "Comandos:"
+        echo "  TermPak list              Lista todos apps"
+        echo "  TermPak search <nome>     Busca apps"
+        echo "  TermPak install <app>     Instala um app"
+        echo ""
+        ;;
+esac
