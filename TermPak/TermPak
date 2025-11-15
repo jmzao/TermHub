@@ -4,7 +4,7 @@
 APPS_DIR="$HOME/termpak-apps"
 mkdir -p "$APPS_DIR"
 
-# Função para listar apps disponíveis
+# Função para exibir apps disponíveis
 function list_apps() {
     echo "Apps disponíveis no TermHub:"
     ls -1 "$HOME/TermHub/apps" | sed 's/\.deb//;s/\.jar//'
@@ -24,7 +24,7 @@ function search_app() {
     fi
 }
 
-# Função para instalar .deb
+# Função para instalar apps (.deb ou .jar)
 function install_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak install <nome_do_app>"
@@ -32,54 +32,49 @@ function install_app() {
     fi
 
     APP="$1"
-    APP_FILE="$HOME/TermHub/apps/$APP.deb"
 
+    # Verifica se é TermHub (arquivo .jar)
+    if [ "$APP" = "TermHub" ]; then
+        if ! command -v java >/dev/null 2>&1; then
+            echo "Erro: Java não encontrado!"
+            echo "Instale com: pkg install openjdk-17"
+            exit 1
+        fi
+
+        mkdir -p "$APPS_DIR/$APP"
+        URL="https://raw.githubusercontent.com/jmzao/TermHub/main/TermHubApp/TermHub.jar"
+        echo "Baixando TermHub..."
+        wget -q "$URL" -O "$APPS_DIR/$APP/TermHub.jar"
+        echo "TermHub instalado com sucesso!"
+
+        # Pergunta sobre atalho
+        read -p "Deseja criar atalho TermHub? [s/N]: " RESP
+        if [[ "$RESP" =~ ^[Ss]$ ]]; then
+            echo "#!/data/data/com.termux/files/usr/bin/bash
+java -jar $APPS_DIR/$APP/TermHub.jar" > "$PREFIX/bin/termhub"
+            chmod +x "$PREFIX/bin/termhub"
+            echo "Atalho criado! Rode 'termhub' para abrir a loja."
+        fi
+
+        # Pergunta sobre ícone
+        read -p "Deseja baixar ícone na área de trabalho? [s/N]: " ICON
+        if [[ "$ICON" =~ ^[Ss]$ ]]; then
+            IMG_URL="https://raw.githubusercontent.com/jmzao/TermHub/main/images/TermHub.png"
+            mkdir -p "$APPS_DIR/$APP/images"
+            wget -q "$IMG_URL" -O "$APPS_DIR/$APP/images/TermHub.png"
+            echo "Ícone baixado em '$APPS_DIR/$APP/images/TermHub.png'"
+        fi
+        exit 0
+    fi
+
+    # Para outros apps (.deb)
+    APP_FILE="$HOME/TermHub/apps/$APP.deb"
     if [ ! -f "$APP_FILE" ]; then
         echo "Aplicativo não existe ou nome errado!"
         exit 1
     fi
-
-    echo "Baixando e instalando $APP..."
-    cp "$APP_FILE" "$APPS_DIR/"
-    dpkg -i "$APPS_DIR/$APP.deb" || echo "Erro ao instalar $APP"
-
-    # Pergunta sobre atalho
-    read -p "Deseja criar um atalho no Termux (comando '$APP')? [s/N]: " RESP
-    if [[ "$RESP" =~ ^[Ss]$ ]]; then
-        echo "#!/data/data/com.termux/files/usr/bin/bash
-dpkg -l | grep -q $APP && echo '$APP já instalado' || echo 'App não instalado'" > "$PREFIX/bin/$APP"
-        chmod +x "$PREFIX/bin/$APP"
-        echo "Atalho criado! Agora você pode rodar '$APP'."
-    fi
-}
-
-# Função para instalar .jar
-function install_jar() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak jar install <nome_do_app>"
-        exit 1
-    fi
-
-    APP="$1"
-    JAR_FILE="$HOME/TermHub/apps/$APP.jar"
-
-    if [ ! -f "$JAR_FILE" ]; then
-        echo "Aplicativo não existe ou nome errado!"
-        exit 1
-    fi
-
-    mkdir -p "$APPS_DIR/$APP"
-    cp "$JAR_FILE" "$APPS_DIR/$APP/"
-    echo "$APP instalado com sucesso!"
-
-    # Pergunta sobre atalho
-    read -p "Deseja criar um atalho no Termux (comando '$APP')? [s/N]: " RESP
-    if [[ "$RESP" =~ ^[Ss]$ ]]; then
-        echo "#!/data/data/com.termux/files/usr/bin/bash
-java -jar $APPS_DIR/$APP/$APP.jar" > "$PREFIX/bin/$APP"
-        chmod +x "$PREFIX/bin/$APP"
-        echo "Atalho criado! Agora você pode rodar o app com '$APP'."
-    fi
+    echo "Instalando $APP..."
+    dpkg -i "$APP_FILE" || echo "Erro ao instalar $APP"
 }
 
 # Função para remover apps
@@ -90,29 +85,33 @@ function remove_app() {
     fi
 
     APP="$1"
-    # Para .jar
-    if [ -d "$APPS_DIR/$APP" ]; then
-        rm -rf "$APPS_DIR/$APP"
-        rm -f "$PREFIX/bin/$APP"
-        echo "$APP removido!"
+
+    if [ "$APP" = "TermHub" ]; then
+        rm -rf "$APPS_DIR/TermHub"
+        rm -f "$PREFIX/bin/termhub"
+        echo "TermHub removido!"
         exit 0
     fi
 
-    # Para .deb
-    APP_FILE="$APPS_DIR/$APP.deb"
-    if [ -f "$APP_FILE" ]; then
-        dpkg -r "$APP" || echo "Erro ao remover $APP"
-        rm -f "$APP_FILE"
-        rm -f "$PREFIX/bin/$APP"
-        echo "$APP removido!"
-        exit 0
+    APP_FILE="$HOME/TermHub/apps/$APP.deb"
+    if [ ! -f "$APP_FILE" ]; then
+        echo "Aplicativo não existe ou não está instalado!"
+        exit 1
     fi
-
-    echo "Aplicativo não existe ou não está instalado!"
+    echo "Removendo $APP..."
+    dpkg -r "$APP" || echo "Erro ao remover $APP"
 }
 
 # Interpretador de comandos
 case "$1" in
+    "" )
+        echo "TermPak versão AlphaTest"
+        echo "Comandos disponíveis:"
+        echo "  list                - Lista todos os apps disponíveis"
+        echo "  search <app>        - Busca um app pelo nome"
+        echo "  install <app>       - Instala um app (.deb ou TermHub.jar)"
+        echo "  remove <app>        - Remove um app instalado"
+        ;;
     list)
         list_apps
         ;;
@@ -125,14 +124,10 @@ case "$1" in
     remove)
         remove_app "$2"
         ;;
-    jar)
-        if [ "$2" = "install" ]; then
-            install_jar "$3"
-        else
-            echo "Uso: TermPak jar install <nome_do_app>"
-        fi
+    TermHub)
+        install_app "TermHub"
         ;;
     *)
-        echo "Comando inválido! Use: list, search, install, remove, jar"
+        echo "Comando inválido! Use: list, search, install, remove"
         ;;
 esac
