@@ -1,36 +1,32 @@
 #!/bin/bash
 
-# TermPak — Instalador de apps .deb armazenados no TermHub
-REPO="https://raw.githubusercontent.com/jmzao/TermHub/main/apps"
+# Diretório onde ficam os apps .deb
+APPS_DIR="$PREFIX/TermPak/apps"
 
-APP="$1"
+# Função para mostrar status
+status() {
+    if [ -f "$PREFIX/bin/TermPak" ]; then
+        echo "TermPak está instalado ✔"
+    else
+        echo "TermPak não está instalado ✘"
+    fi
+}
 
-if [ -z "$APP" ]; then
-    echo "Uso: TermPak <nome-do-app>"
-    echo "Exemplo: TermPak firefox"
+# Se nenhum argumento for passado, mostra o status
+if [ -z "$1" ]; then
+    status
     exit 0
 fi
 
-# Verifica se o app já está instalado
-if dpkg -l | grep -q "^ii  $APP "; then
-    echo "Status: $APP já está instalado."
-else
-    echo "Status: $APP não está instalado."
-fi
+APP_NAME="$1"
+DEB_PATH="$APPS_DIR/$APP_NAME.deb"
 
-# Baixar pacote .deb
-echo "Baixando pacote..."
-curl -L -o "$APP.deb" "$REPO/$APP.deb"
-
-if [ ! -f "$APP.deb" ]; then
-    echo "Erro: app não encontrado no repositório."
+# Verifica se o app existe
+if [ ! -f "$DEB_PATH" ]; then
+    echo "App '$APP_NAME' não encontrado em $APPS_DIR"
     exit 1
 fi
 
-echo "Instalando..."
-dpkg -i "$APP.deb" || apt -f install -y
-
-echo "Limpando..."
-rm "$APP.deb"
-
-echo "Instalação concluída."
+echo "Instalando $APP_NAME..."
+dpkg -i "$DEB_PATH" || pkg install -f
+echo "Feito."
