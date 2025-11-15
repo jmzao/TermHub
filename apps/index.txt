@@ -1,2 +1,2 @@
-TermHub.jar
-x11test.deb
+TermHub
+x11test
