@@ -1,106 +1,51 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-# Diretório onde os apps serão instalados
-APPS_DIR="$HOME/termpak-apps"
-mkdir -p "$APPS_DIR"
+TERMPAK_DIR="$HOME/termpak-apps"
+IMG_DIR="$HOME/images"
+USR_DIR="$HOME/usr"
+ETC_DIR="$HOME/etc"
 
-# Função para exibir apps disponíveis
-function list_apps() {
-    echo "Apps disponíveis no TermHub:"
-    ls -1 "$HOME/TermHub/apps" | sed 's/\.deb//;s/\.jar//'
-}
+mkdir -p "$TERMPAK_DIR" "$IMG_DIR" "$USR_DIR" "$ETC_DIR" "$USR_DIR/bin"
 
-# Função para buscar apps
-function search_app() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak search <nome_do_app>"
-        exit 1
-    fi
-    RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.deb//;s/\.jar//')
-    if [ -z "$RESULT" ]; then
-        echo "Aplicativo não existe ou nome errado!"
-    else
-        echo "$RESULT"
-    fi
-}
-
-# Função para instalar apps (modo seguro dentro do HOME)
-function install_app() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak install <nome_do_app>"
-        exit 1
-    fi
-
+install_app() {
     APP="$1"
-    SRC_FILE="$HOME/TermHub/apps/$APP.deb"
+    DEB_PATH="$TERMPAK_DIR/${APP}.deb"
+    PNG_PATH="$IMG_DIR/${APP}.png"
 
-    if [ ! -f "$SRC_FILE" ]; then
-        echo "Aplicativo não existe ou nome errado!"
+    if [ ! -f "$DEB_PATH" ]; then
+        echo "Pacote ${APP}.deb não encontrado em $TERMPAK_DIR"
         exit 1
     fi
 
-    TARGET_DIR="$APPS_DIR/$APP"
-    mkdir -p "$TARGET_DIR"
+    echo "Instalando $APP a partir de $DEB_PATH..."
 
-    echo "Extraindo $APP.deb para $TARGET_DIR..."
-    dpkg-deb -x "$SRC_FILE" "$TARGET_DIR" || { echo "Erro ao extrair o pacote"; exit 1; }
+    TMP_DIR="$(mktemp -d)"
+    dpkg-deb -x "$DEB_PATH" "$TMP_DIR"
 
-    # Cria atalho no bin
-    BIN_PATH=$(find "$TARGET_DIR" -type f -perm -111 | head -n 1)
-    if [ -z "$BIN_PATH" ]; then
-        echo "Nenhum binário encontrado no pacote. Instalação parcial feita."
+    echo "Copiando arquivos para $USR_DIR e $ETC_DIR..."
+    [ -d "$TMP_DIR/usr" ] && cp -r "$TMP_DIR/usr/"* "$USR_DIR/" 2>/dev/null
+    [ -d "$TMP_DIR/etc" ] && cp -r "$TMP_DIR/etc/"* "$ETC_DIR/" 2>/dev/null
+
+    rm -rf "$TMP_DIR"
+
+    if [ -f "$PNG_PATH" ]; then
+        echo "Ícone encontrado: $PNG_PATH"
     else
-        SHORTCUT="$PREFIX/bin/$APP"
-        echo "#!/data/data/com.termux/files/usr/bin/bash
-$BIN_PATH \$@" > "$SHORTCUT"
-        chmod +x "$SHORTCUT"
-        echo "Atalho criado: $SHORTCUT"
+        echo "Sem ícone PNG correspondente em images/"
     fi
 
-    echo "$APP instalado com sucesso!"
+    echo "Instalação concluída."
 }
 
-# Função para remover apps
-function remove_app() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak remove <nome_do_app>"
-        exit 1
-    fi
-
+uninstall_app() {
     APP="$1"
-    APP_DIR="$APPS_DIR/$APP"
-    if [ ! -d "$APP_DIR" ]; then
-        echo "Aplicativo não está instalado!"
-        exit 1
-    fi
-
-    rm -rf "$APP_DIR"
-    rm -f "$PREFIX/bin/$APP"
-    echo "$APP removido!"
+    echo "Desinstalar ainda não implementado."
 }
 
-# Se o usuário apenas digitar TermPak, mostrar versão e comandos
-if [ -z "$1" ]; then
-    echo "TermPak versão AlphaTest"
-    echo "Comandos disponíveis: list, search, install, remove"
-    exit 0
+if [ "$1" = "install" ]; then
+    install_app "$2"
+elif [ "$1" = "uninstall" ]; then
+    uninstall_app "$2"
+else
+    echo "Uso: TermPak install <app>"
 fi
-
-# Interpretador de comandos
-case "$1" in
-    list)
-        list_apps
-        ;;
-    search)
-        search_app "$2"
-        ;;
-    install)
-        install_app "$2"
-        ;;
-    remove)
-        remove_app "$2"
-        ;;
-    *)
-        echo "Comando inválido! Use: list, search, install, remove"
-        ;;
-esac
