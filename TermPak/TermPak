@@ -1,173 +1,117 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Diretório de instalação local dos apps
+# Diretório onde os apps serão instalados
 APPS_DIR="$HOME/termpak-apps"
-REPO="$HOME/TermHub"
 mkdir -p "$APPS_DIR"
 
-#############################################
-#   FUNÇÃO: listar apps do repositório
-#############################################
+# Função para listar apps disponíveis
 function list_apps() {
-    echo "Apps disponíveis no repositório:"
-    ls -1 "$REPO/apps" | sed 's/.deb$//;s/.jar$//'
+    echo "Apps disponíveis no TermHub:"
+    ls -1 "$HOME/TermHub/apps" | sed 's/\.deb//;s/\.jar//'
 }
 
-#############################################
-#   FUNÇÃO: buscar apps
-#############################################
+# Função para buscar apps
 function search_app() {
     if [ -z "$1" ]; then
-        echo "Uso: TermPak search <nome>"
+        echo "Uso: TermPak search <nome_do_app>"
         exit 1
     fi
-
-    RESULT=$(ls "$REPO/apps" | grep -i "$1")
+    RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.deb//;s/\.jar//')
     if [ -z "$RESULT" ]; then
-        echo "Aplicativo não encontrado!"
+        echo "Aplicativo não existe ou nome errado!"
     else
-        echo "$RESULT" | sed 's/.deb$//;s/.jar$//'
+        echo "$RESULT"
     fi
 }
 
-#############################################
-#   FUNÇÃO: encontrar ícone no repositório
-#############################################
-function find_icon() {
-    local NAME="$1"
-    local ICON_PATH="$REPO/images/${NAME}.png"
-
-    if [ -f "$ICON_PATH" ]; then
-        echo "$ICON_PATH"
-    else
-        echo ""   # Sem ícone
-    fi
-}
-
-#############################################
-#   FUNÇÃO: criar atalho .desktop
-#############################################
-function create_desktop_entry() {
-    local NAME="$1"
-    local EXEC_CMD="$2"
-    local ICON="$3"
-
-    DESK_DIR="$HOME/.local/share/applications"
-    mkdir -p "$DESK_DIR"
-
-    FILE="$DESK_DIR/$NAME.desktop"
-
-    echo "[Desktop Entry]
-Type=Application
-Name=$NAME
-Exec=$EXEC_CMD
-Icon=$ICON
-Terminal=false
-Categories=Application;" > "$FILE"
-
-    chmod +x "$FILE"
-
-    echo "Atalho criado em: $FILE"
-}
-
-#############################################
-#   FUNÇÃO: instalar app
-#############################################
+# Função para instalar .deb
 function install_app() {
-    local APP="$1"
-
-    if [ -z "$APP" ]; then
-        echo "Uso: TermPak install <app>"
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak install <nome_do_app>"
         exit 1
     fi
 
-    local APP_PATH="$REPO/apps/$APP"
+    APP="$1"
+    APP_FILE="$HOME/TermHub/apps/$APP.deb"
 
-    if [ ! -f "$APP_PATH" ]; then
-        echo "Erro: aplicativo não encontrado no repositório!"
+    if [ ! -f "$APP_FILE" ]; then
+        echo "Aplicativo não existe ou nome errado!"
         exit 1
     fi
 
-    local EXT="${APP##*.}"
-    local NAME="${APP%.*}"
-    local ICON=$(find_icon "$NAME")
+    echo "Baixando e instalando $APP..."
+    cp "$APP_FILE" "$APPS_DIR/"
+    dpkg -i "$APPS_DIR/$APP.deb" || echo "Erro ao instalar $APP"
 
-    case "$EXT" in
-
-        #############################################
-        #   INSTALAR .jar
-        #############################################
-        jar)
-            echo "Instalando app Java ($NAME)..."
-
-            mkdir -p "$APPS_DIR/$NAME"
-            cp "$APP_PATH" "$APPS_DIR/$NAME/$NAME.jar"
-
-            # Launcher
-            LAUNCHER="$PREFIX/bin/$NAME"
-            echo "#!/data/data/com.termux/files/usr/bin/bash
-java -jar \"$APPS_DIR/$NAME/$NAME.jar\"" > "$LAUNCHER"
-            chmod +x "$LAUNCHER"
-
-            echo "$NAME instalado com sucesso!"
-
-            read -p "Criar atalho para $NAME? (s/N): " RESP
-            if [[ "$RESP" =~ ^[Ss]$ ]]; then
-                create_desktop_entry "$NAME" "$LAUNCHER" "$ICON"
-            fi
-
-        ;;
-
-        #############################################
-        #   INSTALAR .deb
-        #############################################
-        deb)
-            echo "Instalando pacote Debian ($NAME)..."
-            dpkg -i "$APP_PATH" || echo "Erro ao instalar $NAME"
-
-            read -p "Criar atalho para $NAME? (s/N): " RESP
-            if [[ "$RESP" =~ ^[Ss]$ ]]; then
-                create_desktop_entry "$NAME" "$NAME" "$ICON"
-            fi
-        ;;
-
-        *)
-            echo "Formato não suportado: .$EXT"
-            exit 1
-        ;;
-    esac
+    # Pergunta sobre atalho
+    read -p "Deseja criar um atalho no Termux (comando '$APP')? [s/N]: " RESP
+    if [[ "$RESP" =~ ^[Ss]$ ]]; then
+        echo "#!/data/data/com.termux/files/usr/bin/bash
+dpkg -l | grep -q $APP && echo '$APP já instalado' || echo 'App não instalado'" > "$PREFIX/bin/$APP"
+        chmod +x "$PREFIX/bin/$APP"
+        echo "Atalho criado! Agora você pode rodar '$APP'."
+    fi
 }
 
-#############################################
-#   FUNÇÃO: remover app
-#############################################
-function remove_app() {
-    local APP="$1"
-
-    if [ -z "$APP" ]; then
-        echo "Uso: TermPak remove <app>"
+# Função para instalar .jar
+function install_jar() {
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak jar install <nome_do_app>"
         exit 1
     fi
 
-    local EXT="${APP##*.}"
-    local NAME="${APP%.*}"
+    APP="$1"
+    JAR_FILE="$HOME/TermHub/apps/$APP.jar"
 
-    # Remover jar
-    if [ -d "$APPS_DIR/$NAME" ]; then
-        rm -rf "$APPS_DIR/$NAME"
-        rm -f "$PREFIX/bin/$NAME"
-        rm -f "$HOME/.local/share/applications/$NAME.desktop"
-        echo "$NAME removido!"
+    if [ ! -f "$JAR_FILE" ]; then
+        echo "Aplicativo não existe ou nome errado!"
+        exit 1
+    fi
+
+    mkdir -p "$APPS_DIR/$APP"
+    cp "$JAR_FILE" "$APPS_DIR/$APP/"
+    echo "$APP instalado com sucesso!"
+
+    # Pergunta sobre atalho
+    read -p "Deseja criar um atalho no Termux (comando '$APP')? [s/N]: " RESP
+    if [[ "$RESP" =~ ^[Ss]$ ]]; then
+        echo "#!/data/data/com.termux/files/usr/bin/bash
+java -jar $APPS_DIR/$APP/$APP.jar" > "$PREFIX/bin/$APP"
+        chmod +x "$PREFIX/bin/$APP"
+        echo "Atalho criado! Agora você pode rodar o app com '$APP'."
+    fi
+}
+
+# Função para remover apps
+function remove_app() {
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak remove <nome_do_app>"
+        exit 1
+    fi
+
+    APP="$1"
+    # Para .jar
+    if [ -d "$APPS_DIR/$APP" ]; then
+        rm -rf "$APPS_DIR/$APP"
+        rm -f "$PREFIX/bin/$APP"
+        echo "$APP removido!"
         exit 0
     fi
 
-    # Remover deb (dpkg)
-    dpkg -r "$NAME" && rm -f "$HOME/.local/share/applications/$NAME.desktop"
+    # Para .deb
+    APP_FILE="$APPS_DIR/$APP.deb"
+    if [ -f "$APP_FILE" ]; then
+        dpkg -r "$APP" || echo "Erro ao remover $APP"
+        rm -f "$APP_FILE"
+        rm -f "$PREFIX/bin/$APP"
+        echo "$APP removido!"
+        exit 0
+    fi
+
+    echo "Aplicativo não existe ou não está instalado!"
 }
 
-#############################################
-#   INTERPRETAÇÃO DOS COMANDOS
-#############################################
+# Interpretador de comandos
 case "$1" in
     list)
         list_apps
@@ -181,7 +125,14 @@ case "$1" in
     remove)
         remove_app "$2"
         ;;
+    jar)
+        if [ "$2" = "install" ]; then
+            install_jar "$3"
+        else
+            echo "Uso: TermPak jar install <nome_do_app>"
+        fi
+        ;;
     *)
-        echo "Comandos disponíveis: list, search, install, remove"
+        echo "Comando inválido! Use: list, search, install, remove, jar"
         ;;
 esac
