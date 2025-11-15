@@ -1,15 +1,17 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Diretório padrão onde os apps serão instalados
+# Diretório padrão dos apps
 APP_ROOT="$HOME/termpak-apps"
 mkdir -p "$APP_ROOT"
 
-# Nome do app solicitado
 APP="$1"
 
 if [ -z "$APP" ]; then
-    echo "Uso correto:"
-    echo "  install termhub"
+    echo "Uso:"
+    echo "  install <app>"
+    echo ""
+    echo "Apps disponíveis:"
+    echo "  termhub"
     exit 1
 fi
 
@@ -34,28 +36,25 @@ case "$APP" in
 
         echo "Baixando imagem TermHub.png..."
         wget -q "$IMG_URL" -O "$HUB_DIR/TermHub.png" || {
-            echo "Erro ao baixar imagem"
+            echo "Erro ao baixar imagem PNG"
             exit 1
         }
 
         echo "TermHub instalado com sucesso!"
 
-        # Pergunta se quer criar o comando (atalho)
-        read -p "Criar comando 'termbhub' para abrir a loja? [s/N]: " RESP
-        if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            echo "#!/data/data/com.termux/files/usr/bin/bash
+        # Criar comando automático 'termbhub'
+        echo "Criando comando termbhub..."
+        echo "#!/data/data/com.termux/files/usr/bin/bash
 java -jar $HUB_DIR/TermHub.jar" > "$PREFIX/bin/termbhub"
+        chmod +x "$PREFIX/bin/termbhub"
 
-            chmod +x "$PREFIX/bin/termbhub"
-            echo "Atalho criado! Use: termbhub"
-        fi
+        echo "Comando criado! Rode: termbhub"
         ;;
 
     *)
         echo "Erro: app desconhecido!"
-        echo "Apps disponíveis:"
+        echo "Apps suportados:"
         echo "  termhub"
         exit 1
         ;;
-
 esac
