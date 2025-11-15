@@ -1,26 +1,16 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-VERSION="AlphaTest"
+# Diretório onde os apps serão instalados
 APPS_DIR="$HOME/termpak-apps"
 mkdir -p "$APPS_DIR"
 
-# Mensagem de ajuda / versão
-function show_help() {
-    echo "TermPak Version: $VERSION"
-    echo "Comandos disponíveis:"
-    echo "  list                    - Listar todos os apps disponíveis"
-    echo "  search <nome_do_app>    - Buscar um app pelo nome"
-    echo "  install <nome_do_app>   - Instalar um app (.deb ou .jar)"
-    echo "  remove <nome_do_app>    - Remover um app instalado"
-}
-
-# Listar apps disponíveis
+# Função para exibir apps disponíveis
 function list_apps() {
     echo "Apps disponíveis no TermHub:"
     ls -1 "$HOME/TermHub/apps" | sed 's/\.deb//;s/\.jar//'
 }
 
-# Buscar apps
+# Função para buscar apps
 function search_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak search <nome_do_app>"
@@ -34,7 +24,7 @@ function search_app() {
     fi
 }
 
-# Instalar apps
+# Função para instalar apps (modo seguro dentro do HOME)
 function install_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak install <nome_do_app>"
@@ -42,57 +32,35 @@ function install_app() {
     fi
 
     APP="$1"
-    APP_FILE="$HOME/TermHub/apps/$APP"
+    SRC_FILE="$HOME/TermHub/apps/$APP.deb"
 
-    # Determinar extensão
-    if [ -f "$APP_FILE.deb" ]; then
-        EXT="deb"
-        APP_FILE="$APP_FILE.deb"
-    elif [ -f "$APP_FILE.jar" ]; then
-        EXT="jar"
-        APP_FILE="$APP_FILE.jar"
-    else
+    if [ ! -f "$SRC_FILE" ]; then
         echo "Aplicativo não existe ou nome errado!"
         exit 1
     fi
 
-    # Instalar .deb
-    if [ "$EXT" = "deb" ]; then
-        echo "Baixando e instalando $APP..."
-        dpkg -i "$APP_FILE" || echo "Erro ao instalar $APP"
+    TARGET_DIR="$APPS_DIR/$APP"
+    mkdir -p "$TARGET_DIR"
+
+    echo "Extraindo $APP.deb para $TARGET_DIR..."
+    dpkg-deb -x "$SRC_FILE" "$TARGET_DIR" || { echo "Erro ao extrair o pacote"; exit 1; }
+
+    # Cria atalho no bin
+    BIN_PATH=$(find "$TARGET_DIR" -type f -perm -111 | head -n 1)
+    if [ -z "$BIN_PATH" ]; then
+        echo "Nenhum binário encontrado no pacote. Instalação parcial feita."
+    else
+        SHORTCUT="$PREFIX/bin/$APP"
+        echo "#!/data/data/com.termux/files/usr/bin/bash
+$BIN_PATH \$@" > "$SHORTCUT"
+        chmod +x "$SHORTCUT"
+        echo "Atalho criado: $SHORTCUT"
     fi
 
-    # Instalar .jar
-    if [ "$EXT" = "jar" ]; then
-        if ! command -v java >/dev/null 2>&1; then
-            echo "Erro: Java não encontrado no Termux!"
-            echo "Para instalar, use:"
-            echo "pkg install openjdk-17"
-            exit 1
-        fi
-
-        mkdir -p "$APPS_DIR/$APP"
-        cp "$APP_FILE" "$APPS_DIR/$APP/$APP.jar"
-        echo "$APP instalado com sucesso!"
-
-        # Perguntar sobre atalho
-        read -p "Deseja criar um atalho no Termux (comando '$APP')? [s/N]: " RESP
-        if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            echo "#!/data/data/com.termux/files/usr/bin/bash
-java -jar $APPS_DIR/$APP/$APP.jar" > "$PREFIX/bin/$APP"
-            chmod +x "$PREFIX/bin/$APP"
-            echo "Atalho criado! Rode '$APP' para abrir."
-        fi
-
-        # Procurar imagem
-        IMG_FILE="$HOME/TermHub/images/$APP.png"
-        if [ -f "$IMG_FILE" ]; then
-            echo "Imagem associada encontrada: $IMG_FILE"
-        fi
-    fi
+    echo "$APP instalado com sucesso!"
 }
 
-# Remover apps
+# Função para remover apps
 function remove_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak remove <nome_do_app>"
@@ -100,21 +68,23 @@ function remove_app() {
     fi
 
     APP="$1"
-    APP_FILE="$APPS_DIR/$APP"
-
-    if [ -d "$APP_FILE" ]; then
-        rm -rf "$APP_FILE"
-        rm -f "$PREFIX/bin/$APP"
-        echo "$APP removido com sucesso!"
-        exit 0
+    APP_DIR="$APPS_DIR/$APP"
+    if [ ! -d "$APP_DIR" ]; then
+        echo "Aplicativo não está instalado!"
+        exit 1
     fi
 
-    if dpkg -s "$APP" >/dev/null 2>&1; then
-        dpkg -r "$APP" || echo "Erro ao remover $APP"
-    else
-        echo "Aplicativo não existe ou não está instalado!"
-    fi
+    rm -rf "$APP_DIR"
+    rm -f "$PREFIX/bin/$APP"
+    echo "$APP removido!"
 }
+
+# Se o usuário apenas digitar TermPak, mostrar versão e comandos
+if [ -z "$1" ]; then
+    echo "TermPak versão AlphaTest"
+    echo "Comandos disponíveis: list, search, install, remove"
+    exit 0
+fi
 
 # Interpretador de comandos
 case "$1" in
@@ -130,11 +100,7 @@ case "$1" in
     remove)
         remove_app "$2"
         ;;
-    "")
-        show_help
-        ;;
     *)
         echo "Comando inválido! Use: list, search, install, remove"
-        show_help
         ;;
 esac
