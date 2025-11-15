@@ -1,44 +1,55 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-REPO_DIR="$HOME/TermHub"       # diretório do repositório
-APP_DIR="$REPO_DIR/TermHubApp"
-IMG_DIR="$REPO_DIR/images"
-JAR_FILE="$APP_DIR/TermHub.jar"
-ICON_FILE="$IMG_DIR/TermHub.png"
-DESKTOP_DIR="$HOME/.local/share/applications"
-LAUNCHER="$DESKTOP_DIR/TermHub.desktop"
+# Diretório para apps instalados
+APPS_DIR="$HOME/termpak-apps"
+mkdir -p "$APPS_DIR"
 
-if [ "$1" = "install" ] && [ "$2" = "termhub" ]; then
-    echo "Instalando TermHub..."
+# Caminhos do TermHub no repositório
+TERMHUB_APP_DIR="$HOME/TermHubApp"
+TERMHUB_JAR="$TERMHUB_APP_DIR/TermHub.jar"
+TERMHUB_IMG="$HOME/TermHub/images/TermHub.png"
 
-    if [ ! -f "$JAR_FILE" ]; then
-        echo "Erro: TermHub.jar não encontrado em $APP_DIR"
+# Função para instalar o TermHub
+install_termhub() {
+    if [ ! -f "$TERMHUB_JAR" ]; then
+        echo "Erro: TermHub.jar não encontrado em $TERMHUB_APP_DIR!"
         exit 1
     fi
 
-    mkdir -p "$HOME/.local/share/TermHub"
-    cp "$JAR_FILE" "$HOME/.local/share/TermHub/TermHub.jar"
+    mkdir -p "$APPS_DIR/TermHub"
+    cp "$TERMHUB_JAR" "$APPS_DIR/TermHub/TermHub.jar"
+    echo "TermHub instalado com sucesso!"
 
-    echo "TermHub instalado em ~/.local/share/TermHub/"
-    
-    # Perguntar por atalho
-    read -p "Criar atalho na área de trabalho? (s/n): " RES
-    if [ "$RES" = "s" ] || [ "$RES" = "S" ]; then
-        mkdir -p "$DESKTOP_DIR"
-        echo "[Desktop Entry]
-Type=Application
-Name=TermHub
-Exec=termux-open --launch-app 'sh -c \"java -jar $HOME/.local/share/TermHub/TermHub.jar\"'
-Icon=$ICON_FILE
-Terminal=false
-Categories=Utility;" > "$LAUNCHER"
-
-        echo "Atalho criado em $LAUNCHER"
+    # Perguntar sobre atalho
+    read -p "Deseja criar um atalho no Termux (comando 'termbhub')? [s/N]: " RESP
+    if [[ "$RESP" =~ ^[Ss]$ ]]; then
+        echo "#!/data/data/com.termux/files/usr/bin/bash
+java -jar $APPS_DIR/TermHub/TermHub.jar" > "$PREFIX/bin/termbhub"
+        chmod +x "$PREFIX/bin/termbhub"
+        echo "Atalho criado! Use 'termbhub' para abrir a loja."
     fi
 
-    exit 0
-fi
+    # Perguntar sobre ícone
+    if [ -f "$TERMHUB_IMG" ]; then
+        read -p "Deseja copiar o ícone na área de trabalho do Termux? [s/N]: " ICON
+        if [[ "$ICON" =~ ^[Ss]$ ]]; then
+            mkdir -p "$APPS_DIR/TermHub/images"
+            cp "$TERMHUB_IMG" "$APPS_DIR/TermHub/images/TermHub.png"
+            echo "Ícone copiado! Use '$APPS_DIR/TermHub/images/TermHub.png'."
+        fi
+    fi
+}
 
-echo "Uso:
-  termhub install termhub
-"
+# Interpretar subcomandos
+case "$1" in
+    install)
+        if [ "$2" = "termhub" ]; then
+            install_termhub
+        else
+            echo "App desconhecido ou nome errado!"
+        fi
+        ;;
+    *)
+        echo "Comando inválido! Use: termhub install termhub"
+        ;;
+esac
