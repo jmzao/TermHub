@@ -1,51 +1,100 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-TERMPAK_DIR="$HOME/termpak-apps"
-IMG_DIR="$HOME/images"
-USR_DIR="$HOME/usr"
-ETC_DIR="$HOME/etc"
+REPO_BASE="https://raw.githubusercontent.com/jmzao/TermHub/main"
+APPS_DIR="$HOME/termpak-apps"
+INSTALL_PREFIX="$PREFIX"
 
-mkdir -p "$TERMPAK_DIR" "$IMG_DIR" "$USR_DIR" "$ETC_DIR" "$USR_DIR/bin"
+# Certifica que a pasta local existe
+mkdir -p "$APPS_DIR"
 
-install_app() {
-    APP="$1"
-    DEB_PATH="$TERMPAK_DIR/${APP}.deb"
-    PNG_PATH="$IMG_DIR/${APP}.png"
+# Função para extrair o .deb manualmente
+extract_deb() {
+    local debfile="$1"
+    local tempdir=$(mktemp -d)
 
-    if [ ! -f "$DEB_PATH" ]; then
-        echo "Pacote ${APP}.deb não encontrado em $TERMPAK_DIR"
+    ar x "$debfile" --output="$tempdir"
+
+    if [ ! -f "$tempdir/data.tar.xz" ] && [ ! -f "$tempdir/data.tar.gz" ]; then
+        echo "Pacote .deb corrompido!"
+        rm -rf "$tempdir"
+        return 1
+    fi
+
+    if [ -f "$tempdir/data.tar.xz" ]; then
+        tar -xJf "$tempdir/data.tar.xz" -C "$INSTALL_PREFIX"
+    else
+        tar -xzf "$tempdir/data.tar.gz" -C "$INSTALL_PREFIX"
+    fi
+
+    rm -rf "$tempdir"
+}
+
+# Mostrar comandos e versão
+if [ $# -eq 0 ]; then
+    echo "🔥 TermPak AlphaTest"
+    echo ""
+    echo "Comandos disponíveis:"
+    echo "  TermPak list"
+    echo "  TermPak search nome"
+    echo "  TermPak install nome"
+    echo "  TermPak remove nome"
+    exit 0
+fi
+
+cmd="$1"
+pkg="$2"
+
+# LISTAR
+if [ "$cmd" = "list" ]; then
+    curl -s "$REPO_BASE/index.txt"
+    exit 0
+fi
+
+# PROCURAR
+if [ "$cmd" = "search" ]; then
+    curl -s "$REPO_BASE/index.txt" | grep -i "$pkg"
+    exit 0
+fi
+
+# INSTALAR
+if [ "$cmd" = "install" ]; then
+    if [ -z "$pkg" ]; then
+        echo "Use: TermPak install nome"
         exit 1
     fi
 
-    echo "Instalando $APP a partir de $DEB_PATH..."
+    echo "Baixando e instalando $pkg..."
 
-    TMP_DIR="$(mktemp -d)"
-    dpkg-deb -x "$DEB_PATH" "$TMP_DIR"
+    # Baixa o .deb
+    curl -L "$REPO_BASE/termpak-apps/$pkg.deb" -o "$APPS_DIR/$pkg.deb"
 
-    echo "Copiando arquivos para $USR_DIR e $ETC_DIR..."
-    [ -d "$TMP_DIR/usr" ] && cp -r "$TMP_DIR/usr/"* "$USR_DIR/" 2>/dev/null
-    [ -d "$TMP_DIR/etc" ] && cp -r "$TMP_DIR/etc/"* "$ETC_DIR/" 2>/dev/null
-
-    rm -rf "$TMP_DIR"
-
-    if [ -f "$PNG_PATH" ]; then
-        echo "Ícone encontrado: $PNG_PATH"
-    else
-        echo "Sem ícone PNG correspondente em images/"
+    if [ ! -f "$APPS_DIR/$pkg.deb" ]; then
+        echo "Erro: pacote não encontrado!"
+        exit 1
     fi
 
-    echo "Instalação concluída."
-}
+    # Extrai o pacote para dentro do PREFIX
+    extract_deb "$APPS_DIR/$pkg.deb" || {
+        echo "Erro ao instalar $pkg"
+        exit 1
+    }
 
-uninstall_app() {
-    APP="$1"
-    echo "Desinstalar ainda não implementado."
-}
+    echo "Instalado com sucesso!"
 
-if [ "$1" = "install" ]; then
-    install_app "$2"
-elif [ "$1" = "uninstall" ]; then
-    uninstall_app "$2"
-else
-    echo "Uso: TermPak install <app>"
+    # Ícone opcional
+    if [ -f "$APPS_DIR/$pkg.png" ]; then
+        echo "(ícone já local)"
+    else
+        curl -L "$REPO_BASE/images/$pkg.png" -o "$APPS_DIR/$pkg.png"
+    fi
+
+    exit 0
 fi
+
+# REMOVER (não destrói nada do sistema)
+if [ "$cmd" = "remove" ]; then
+    echo "Remover ainda não implementado."
+    exit 0
+fi
+
+echo "Comando inválido! Use: list, search, install, remove"
