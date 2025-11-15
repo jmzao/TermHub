@@ -1,55 +1,123 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# TermPak CLI - Gerenciar apps TermHub
 
-REPO_URL="https://raw.githubusercontent.com/jmzao/termhub/main/apps"
+# Diretório onde os apps serão instalados
 APPS_DIR="$HOME/termpak-apps"
-
 mkdir -p "$APPS_DIR"
 
+# Função para exibir apps disponíveis
+function list_apps() {
+    echo "Apps disponíveis no TermHub:"
+    ls -1 "$HOME/TermHub/apps" | sed 's/\.deb//;s/\.jar//'
+}
+
+# Função para buscar apps
+function search_app() {
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak search <nome_do_app>"
+        exit 1
+    fi
+    RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.deb//;s/\.jar//')
+    if [ -z "$RESULT" ]; then
+        echo "Aplicativo não existe ou nome errado!"
+    else
+        echo "$RESULT"
+    fi
+}
+
+# Função para instalar apps
+function install_app() {
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak install <nome_do_app>"
+        exit 1
+    fi
+
+    APP="$1"
+
+    # Caso seja o TermHub (loja)
+    if [ "$APP" = "TermHub" ]; then
+        # Verifica se o Java está instalado
+        if ! command -v java >/dev/null 2>&1; then
+            echo "Erro: Java não encontrado no Termux!"
+            echo "Para instalar, use:"
+            echo "pkg install openjdk-17"
+            exit 1
+        fi
+
+        mkdir -p "$APPS_DIR/TermHub"
+        URL="https://raw.githubusercontent.com/jmzao/TermHub/main/TermHubApp/TermHub.jar"
+        echo "Baixando TermHub..."
+        wget -q "$URL" -O "$APPS_DIR/TermHub/TermHub.jar"
+        echo "TermHub instalado com sucesso!"
+
+        # Pergunta sobre atalho no Termux
+        read -p "Deseja criar um atalho no Termux (comando 'termbhub')? [s/N]: " RESP
+        if [[ "$RESP" =~ ^[Ss]$ ]]; then
+            echo "#!/data/data/com.termux/files/usr/bin/bash
+java -jar $APPS_DIR/TermHub/TermHub.jar" > "$PREFIX/bin/termbhub"
+            chmod +x "$PREFIX/bin/termbhub"
+            echo "Atalho criado! Agora você pode rodar a loja com 'termbhub'."
+        fi
+
+        # Pergunta sobre ícone na área de trabalho (Termux GUI)
+        read -p "Deseja criar um ícone na área de trabalho do Termux? [s/N]: " ICON
+        if [[ "$ICON" =~ ^[Ss]$ ]]; then
+            IMG_URL="https://raw.githubusercontent.com/jmzao/TermHub/main/images/termhub.png"
+            mkdir -p "$APPS_DIR/TermHub/images"
+            wget -q "$IMG_URL" -O "$APPS_DIR/TermHub/images/termhub.png"
+            echo "Ícone baixado! Você pode usar '$APPS_DIR/TermHub/images/termhub.png' para criar atalhos."
+        fi
+
+        exit 0
+    fi
+
+    # Para outros apps (.deb)
+    APP_FILE="$HOME/TermHub/apps/$APP.deb"
+    if [ ! -f "$APP_FILE" ]; then
+        echo "Aplicativo não existe ou nome errado!"
+        exit 1
+    fi
+    echo "Instalando $APP..."
+    dpkg -i "$APP_FILE" || echo "Erro ao instalar $APP"
+}
+
+# Função para remover apps
+function remove_app() {
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak remove <nome_do_app>"
+        exit 1
+    fi
+
+    APP="$1"
+
+    if [ "$APP" = "TermHub" ]; then
+        rm -rf "$APPS_DIR/TermHub"
+        rm -f "$PREFIX/bin/termbhub"
+        echo "TermHub removido!"
+        exit 0
+    fi
+
+    APP_FILE="$HOME/TermHub/apps/$APP.deb"
+    if [ ! -f "$APP_FILE" ]; then
+        echo "Aplicativo não existe ou não está instalado!"
+        exit 1
+    fi
+    echo "Removendo $APP..."
+    dpkg -r "$APP" || echo "Erro ao remover $APP"
+}
+
+# Interpretador de comandos
 case "$1" in
     list)
-        echo "Apps disponíveis no TermHub:"
-        curl -s "$REPO_URL/index.txt" || echo "Não foi possível acessar o repositório."
+        list_apps
         ;;
     search)
-        if [ -z "$2" ]; then
-            echo "Uso: TermPak search <nome_do_app>"
-            exit 1
-        fi
-        RESULT=$(curl -s "$REPO_URL/index.txt" | grep -i "$2")
-        if [ -z "$RESULT" ]; then
-            echo "Aplicativo não existe ou nome errado!"
-        else
-            echo "$RESULT"
-        fi
+        search_app "$2"
         ;;
     install)
-        if [ -z "$2" ]; then
-            echo "Uso: TermPak install <nome_do_app>"
-            exit 1
-        fi
-        APP="$2"
-        if ! curl -s "$REPO_URL/index.txt" | grep -q -i "^$APP\$"; then
-            echo "Aplicativo não existe ou nome errado!"
-            exit 1
-        fi
-        echo "Baixando e instalando $APP..."
-        wget -q "$REPO_URL/$APP.deb" -O "$APPS_DIR/$APP.deb"
-        dpkg -i "$APPS_DIR/$APP.deb" || echo "Erro ao instalar $APP"
+        install_app "$2"
         ;;
     remove)
-        if [ -z "$2" ]; then
-            echo "Uso: TermPak remove <nome_do_app>"
-            exit 1
-        fi
-        APP="$2"
-        if [ ! -f "$APPS_DIR/$APP.deb" ]; then
-            echo "Aplicativo não existe ou não está instalado!"
-            exit 1
-        fi
-        echo "Removendo $APP..."
-        dpkg -r "$APP" || echo "Erro ao remover $APP"
-        rm -f "$APPS_DIR/$APP.deb"
+        remove_app "$2"
         ;;
     *)
         echo "Comando inválido! Use: list, search, install, remove"
