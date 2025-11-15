@@ -1,0 +1,26 @@
+#!/bin/bash
+# CLI TermPak - Instala apps do TermHub
+REPO_URL="https://raw.githubusercontent.com/jmzao/termhub/main/scripts"
+
+if [ -z "$1" ]; then
+    echo "Uso: termpak <nome_do_app>"
+    echo "Exemplo: termpak exemplo"
+    exit 1
+fi
+
+APP_NAME="$1"
+INSTALL_SCRIPT="$APP_NAME"_install.sh
+
+# Criar pasta de apps isolados
+mkdir -p $HOME/termpak-apps
+
+# Baixar script do TermHub
+echo "Baixando script de instalação do $APP_NAME..."
+curl -LO "$REPO_URL/$INSTALL_SCRIPT" || { echo "App não encontrado!"; exit 1; }
+
+# Tornar executável e rodar
+chmod +x "$INSTALL_SCRIPT"
+bash "$INSTALL_SCRIPT"
+
+# Limpar script após instalação (opcional)
+rm "$INSTALL_SCRIPT"
