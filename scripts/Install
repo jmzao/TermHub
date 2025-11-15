@@ -1,30 +1,27 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Diretório padrão dos apps
 APP_ROOT="$HOME/termpak-apps"
 mkdir -p "$APP_ROOT"
 
-APP="$1"
+CMD="$1"
+APP="$2"
 
-if [ -z "$APP" ]; then
-    echo "Uso:"
-    echo "  install <app>"
-    echo ""
-    echo "Apps disponíveis:"
-    echo "  termhub"
-    exit 1
-fi
+BASE_URL="https://raw.githubusercontent.com/jmzao/TermHub/main"
 
-case "$APP" in
+case "$CMD" in
 
-    termhub)
+    install)
+        if [ "$APP" != "termhub" ]; then
+            echo "Uso correto: termhub install termhub"
+            exit 1
+        fi
+
         echo "Instalando TermHub..."
 
         HUB_DIR="$APP_ROOT/TermHub"
         mkdir -p "$HUB_DIR"
 
-        BASE_URL="https://raw.githubusercontent.com/jmzao/TermHub/main"
-
+        # URLs do repositório
         JAR_URL="$BASE_URL/TermHubApp/TermHub.jar"
         IMG_URL="$BASE_URL/images/TermHub.png"
 
@@ -40,21 +37,44 @@ case "$APP" in
             exit 1
         }
 
+        echo "Criando comando interno 'termhub-run'..."
+        echo "#!/data/data/com.termux/files/usr/bin/bash
+java -jar \"$HUB_DIR/TermHub.jar\"" > "$PREFIX/bin/termhub-run"
+        chmod +x "$PREFIX/bin/termhub-run"
+
         echo "TermHub instalado com sucesso!"
 
-        # Criar comando automático 'termbhub'
-        echo "Criando comando termbhub..."
-        echo "#!/data/data/com.termux/files/usr/bin/bash
-java -jar $HUB_DIR/TermHub.jar" > "$PREFIX/bin/termbhub"
-        chmod +x "$PREFIX/bin/termbhub"
+        # Perguntar sobre criar atalho
+        echo -n "Quer criar um atalho na área de trabalho? (s/n): "
+        read RESP
 
-        echo "Comando criado! Rode: termbhub"
+        if [ "$RESP" = "s" ] || [ "$RESP" = "S" ]; then
+            DESKTOP="$HOME/Desktop"
+            mkdir -p "$DESKTOP"
+
+            SHORTCUT="$DESKTOP/TermHub.desktop"
+
+            echo "Criando atalho..."
+
+            cat > "$SHORTCUT" <<EOF
+[Desktop Entry]
+Type=Application
+Name=TermHub
+Exec=termhub-run
+Icon=$HUB_DIR/TermHub.png
+Terminal=false
+EOF
+
+            chmod +x "$SHORTCUT"
+
+            echo "Atalho criado em: $SHORTCUT"
+        fi
+
         ;;
 
     *)
-        echo "Erro: app desconhecido!"
-        echo "Apps suportados:"
-        echo "  termhub"
-        exit 1
+        echo "Comando desconhecido."
+        echo "Uso:"
+        echo "  termhub install termhub"
         ;;
 esac
