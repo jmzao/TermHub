@@ -1,80 +1,44 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-APP_ROOT="$HOME/termpak-apps"
-mkdir -p "$APP_ROOT"
+REPO_DIR="$HOME/TermHub"       # diretório do repositório
+APP_DIR="$REPO_DIR/TermHubApp"
+IMG_DIR="$REPO_DIR/images"
+JAR_FILE="$APP_DIR/TermHub.jar"
+ICON_FILE="$IMG_DIR/TermHub.png"
+DESKTOP_DIR="$HOME/.local/share/applications"
+LAUNCHER="$DESKTOP_DIR/TermHub.desktop"
 
-CMD="$1"
-APP="$2"
+if [ "$1" = "install" ] && [ "$2" = "termhub" ]; then
+    echo "Instalando TermHub..."
 
-BASE_URL="https://raw.githubusercontent.com/jmzao/TermHub/main"
+    if [ ! -f "$JAR_FILE" ]; then
+        echo "Erro: TermHub.jar não encontrado em $APP_DIR"
+        exit 1
+    fi
 
-case "$CMD" in
+    mkdir -p "$HOME/.local/share/TermHub"
+    cp "$JAR_FILE" "$HOME/.local/share/TermHub/TermHub.jar"
 
-    install)
-        if [ "$APP" != "termhub" ]; then
-            echo "Uso correto: termhub install termhub"
-            exit 1
-        fi
-
-        echo "Instalando TermHub..."
-
-        HUB_DIR="$APP_ROOT/TermHub"
-        mkdir -p "$HUB_DIR"
-
-        # URLs do repositório
-        JAR_URL="$BASE_URL/TermHubApp/TermHub.jar"
-        IMG_URL="$BASE_URL/images/TermHub.png"
-
-        echo "Baixando TermHub.jar..."
-        wget -q "$JAR_URL" -O "$HUB_DIR/TermHub.jar" || {
-            echo "Erro ao baixar TermHub.jar"
-            exit 1
-        }
-
-        echo "Baixando imagem TermHub.png..."
-        wget -q "$IMG_URL" -O "$HUB_DIR/TermHub.png" || {
-            echo "Erro ao baixar imagem PNG"
-            exit 1
-        }
-
-        echo "Criando comando interno 'termhub-run'..."
-        echo "#!/data/data/com.termux/files/usr/bin/bash
-java -jar \"$HUB_DIR/TermHub.jar\"" > "$PREFIX/bin/termhub-run"
-        chmod +x "$PREFIX/bin/termhub-run"
-
-        echo "TermHub instalado com sucesso!"
-
-        # Perguntar sobre criar atalho
-        echo -n "Quer criar um atalho na área de trabalho? (s/n): "
-        read RESP
-
-        if [ "$RESP" = "s" ] || [ "$RESP" = "S" ]; then
-            DESKTOP="$HOME/Desktop"
-            mkdir -p "$DESKTOP"
-
-            SHORTCUT="$DESKTOP/TermHub.desktop"
-
-            echo "Criando atalho..."
-
-            cat > "$SHORTCUT" <<EOF
-[Desktop Entry]
+    echo "TermHub instalado em ~/.local/share/TermHub/"
+    
+    # Perguntar por atalho
+    read -p "Criar atalho na área de trabalho? (s/n): " RES
+    if [ "$RES" = "s" ] || [ "$RES" = "S" ]; then
+        mkdir -p "$DESKTOP_DIR"
+        echo "[Desktop Entry]
 Type=Application
 Name=TermHub
-Exec=termhub-run
-Icon=$HUB_DIR/TermHub.png
+Exec=termux-open --launch-app 'sh -c \"java -jar $HOME/.local/share/TermHub/TermHub.jar\"'
+Icon=$ICON_FILE
 Terminal=false
-EOF
+Categories=Utility;" > "$LAUNCHER"
 
-            chmod +x "$SHORTCUT"
+        echo "Atalho criado em $LAUNCHER"
+    fi
 
-            echo "Atalho criado em: $SHORTCUT"
-        fi
+    exit 0
+fi
 
-        ;;
-
-    *)
-        echo "Comando desconhecido."
-        echo "Uso:"
-        echo "  termhub install termhub"
-        ;;
-esac
+echo "Uso:
+  termhub install termhub
+"
