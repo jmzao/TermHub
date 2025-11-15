@@ -1,125 +1,106 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Diretório onde os apps serão instalados
 APPS_DIR="$HOME/termpak-apps"
 mkdir -p "$APPS_DIR"
 
-# Função para exibir apps disponíveis
-function list_apps() {
-    echo "Apps disponíveis no TermHub:"
-    ls -1 "$HOME/TermHub/apps" | sed 's/\.deb//;s/\.jar//'
-}
+function find_icon() {
+    local NAME="$1"
 
-# Função para buscar apps
-function search_app() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak search <nome_do_app>"
-        exit 1
-    fi
-    RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.deb//;s/\.jar//')
-    if [ -z "$RESULT" ]; then
-        echo "Aplicativo não existe ou nome errado!"
+    # Ícones ficam em: ~/TermHub/images/NOME.png
+    if [ -f "$HOME/TermHub/images/${NAME}.png" ]; then
+        echo "$HOME/TermHub/images/${NAME}.png"
     else
-        echo "$RESULT"
+        echo ""
     fi
 }
 
-# Função para instalar apps
+function create_desktop_entry() {
+    local NAME="$1"
+    local EXEC="$2"
+    local ICON="$3"
+
+    DESKTOP_FILE="$HOME/.local/share/applications/${NAME}.desktop"
+    mkdir -p "$HOME/.local/share/applications"
+
+    echo "[Desktop Entry]
+Name=$NAME
+Exec=$EXEC
+Type=Application
+Icon=$ICON
+Terminal=false" > "$DESKTOP_FILE"
+
+    echo "Atalho criado em $DESKTOP_FILE"
+}
+
 function install_app() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak install <nome_do_app>"
+    local APP="$1"
+    local APP_PATH="$HOME/TermHub/apps/$APP"
+
+    if [ ! -f "$APP_PATH" ]; then
+        echo "Erro: app não existe."
         exit 1
     fi
 
-    APP="$1"
+    EXT="${APP##*.}"
+    NAME="${APP%.*}"
 
-    # Caso seja o TermHub (loja)
-    if [ "$APP" = "TermHub" ]; then
-        # Verifica se o Java está instalado
-        if ! command -v java >/dev/null 2>&1; then
-            echo "Erro: Java não encontrado no Termux!"
-            echo "Para instalar, use:"
-            echo "pkg install openjdk-17"
-            exit 1
-        fi
+    ICON=$(find_icon "$NAME")
 
-        mkdir -p "$APPS_DIR/TermHub"
-        URL="https://raw.githubusercontent.com/jmzao/TermHub/main/TermHubApp/TermHub.jar"
-        echo "Baixando TermHub..."
-        wget -q "$URL" -O "$APPS_DIR/TermHub/TermHub.jar"
-        echo "TermHub instalado com sucesso!"
+    # INSTALAR .JAR
+    if [ "$EXT" = "jar" ]; then
+        echo "Instalando app Java..."
 
-        # Pergunta sobre atalho no Termux
-        read -p "Deseja criar um atalho no Termux (comando 'termbhub')? [s/N]: " RESP
+        mkdir -p "$APPS_DIR/$NAME"
+        cp "$APP_PATH" "$APPS_DIR/$NAME/$NAME.jar"
+
+        LAUNCHER="$PREFIX/bin/$NAME"
+        echo "#!/data/data/com.termux/files/usr/bin/bash
+java -jar \"$APPS_DIR/$NAME/$NAME.jar\"" > "$LAUNCHER"
+        chmod +x "$LAUNCHER"
+
+        echo "$NAME instalado com sucesso!"
+
+        read -p "Criar atalho na área de trabalho? (s/N): " RESP
         if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            echo "#!/data/data/com.termux/files/usr/bin/bash
-java -jar $APPS_DIR/TermHub/TermHub.jar" > "$PREFIX/bin/termbhub"
-            chmod +x "$PREFIX/bin/termbhub"
-            echo "Atalho criado! Agora você pode rodar a loja com 'termbhub'."
-        fi
-
-        # Pergunta sobre ícone na área de trabalho (Termux GUI)
-        read -p "Deseja criar um ícone na área de trabalho do Termux? [s/N]: " ICON
-        if [[ "$ICON" =~ ^[Ss]$ ]]; then
-            IMG_URL="https://raw.githubusercontent.com/jmzao/TermHub/main/images/termhub.png"
-            mkdir -p "$APPS_DIR/TermHub/images"
-            wget -q "$IMG_URL" -O "$APPS_DIR/TermHub/images/termhub.png"
-            echo "Ícone baixado! Você pode usar '$APPS_DIR/TermHub/images/termhub.png' para criar atalhos."
+            create_desktop_entry "$NAME" "$LAUNCHER" "$ICON"
         fi
 
         exit 0
     fi
 
-    # Para outros apps (.deb)
-    APP_FILE="$HOME/TermHub/apps/$APP.deb"
-    if [ ! -f "$APP_FILE" ]; then
-        echo "Aplicativo não existe ou nome errado!"
-        exit 1
-    fi
-    echo "Instalando $APP..."
-    dpkg -i "$APP_FILE" || echo "Erro ao instalar $APP"
-}
+    # INSTALAR .DEB
+    if [ "$EXT" = "deb" ]; then
+        echo "Instalando pacote Debian..."
+        dpkg -i "$APP_PATH" || echo "Erro ao instalar $NAME"
 
-# Função para remover apps
-function remove_app() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak remove <nome_do_app>"
-        exit 1
-    fi
+        read -p "Criar atalho na área de trabalho? (s/N): " RESP
+        if [[ "$RESP" =~ ^[Ss]$ ]]; then
+            create_desktop_entry "$NAME" "$NAME" "$ICON"
+        fi
 
-    APP="$1"
-
-    if [ "$APP" = "TermHub" ]; then
-        rm -rf "$APPS_DIR/TermHub"
-        rm -f "$PREFIX/bin/termbhub"
-        echo "TermHub removido!"
         exit 0
     fi
 
-    APP_FILE="$HOME/TermHub/apps/$APP.deb"
-    if [ ! -f "$APP_FILE" ]; then
-        echo "Aplicativo não existe ou não está instalado!"
-        exit 1
-    fi
-    echo "Removendo $APP..."
-    dpkg -r "$APP" || echo "Erro ao remover $APP"
+    echo "Formato não suportado: .$EXT"
 }
 
-# Interpretador de comandos
+function list_apps() {
+    echo "Apps disponíveis:"
+    ls -1 "$HOME/TermHub/apps"
+}
+
+function search_app() {
+    grep -i "$1" "$HOME/TermHub/apps"
+}
+
 case "$1" in
     list)
-        list_apps
-        ;;
-    search)
-        search_app "$2"
-        ;;
+        list_apps ;;
     install)
-        install_app "$2"
-        ;;
-    remove)
-        remove_app "$2"
-        ;;
+        install_app "$2" ;;
+    search)
+        search_app "$2" ;;
     *)
-        echo "Comando inválido! Use: list, search, install, remove"
+        echo "Use: list, install <app>, search <nome>"
         ;;
 esac
