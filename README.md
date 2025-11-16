@@ -19,3 +19,5 @@ echo "deb [trusted=yes] https://raw.githubusercontent.com/jmzao/TermHub/main/ ./
 ### update repository
 ```bash
 pkg update
+```
+####⚠️ Some errors may appear when running pkg update after adding the repository. This is normal and won't cause problems.
