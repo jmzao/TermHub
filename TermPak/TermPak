@@ -132,7 +132,17 @@ Terminal=false" > "$HOME/Desktop/$APP_NAME.desktop"
 # ------------------------------
 # Interpretador de comandos
 # ------------------------------
+if [ -z "$1" ]; then
+    echo "TermPak versão $VERSION"
+    echo "Comandos disponíveis: list, search, install, remove, install-ref, version"
+    exit 0
+fi
+
 case "$1" in
+    version)
+        echo "TermPak versão $VERSION"
+        echo "Comandos disponíveis: list, search, install, remove, install-ref, version"
+        ;;
     list)
         list_apps
         ;;
@@ -147,10 +157,6 @@ case "$1" in
         ;;
     install-ref)
         install_ref "$2"
-        ;;
-    version|"")
-        echo "TermPak versão $VERSION"
-        echo "Comandos disponíveis: list, search, install, remove, install-ref, version"
         ;;
     *)
         echo "Comando inválido! Use: list, search, install, remove, install-ref, version"
