@@ -1,26 +1,36 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-VERSION="AlphaTest"
+# Versão do TermPak
+TERMPAK_VERSION="AlphaTest"
+
+# Diretório de apps
 APPS_DIR="$HOME/termpak-apps"
 mkdir -p "$APPS_DIR"
 
-# ------------------------------
-# Listar apps do repositório
-# ------------------------------
-function list_apps() {
-    echo "Apps disponíveis no TermHub:"
-    ls -1 "$HOME/TermHub/apps" | sed 's/\.deb//;s/\.jar//'
+# Mostrar versão e comandos
+function show_version() {
+    echo "TermPak versão: $TERMPAK_VERSION"
+    echo "Comandos disponíveis:"
+    echo "  list           -> Listar apps disponíveis"
+    echo "  search <app>   -> Buscar app pelo nome"
+    echo "  install <app>  -> Instalar app do repositório"
+    echo "  install-ref <arquivo.TermPakref> -> Instalar app externo"
+    echo "  remove <app>   -> Remover app instalado"
 }
 
-# ------------------------------
-# Buscar apps
-# ------------------------------
+# Listar apps do repositório
+function list_apps() {
+    echo "Apps disponíveis no TermHub:"
+    ls -1 "$HOME/TermHub/apps" | sed 's/\.TermPakref//'
+}
+
+# Buscar apps no repositório
 function search_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak search <nome_do_app>"
         exit 1
     fi
-    RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.deb//;s/\.jar//')
+    RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.TermPakref//')
     if [ -z "$RESULT" ]; then
         echo "Aplicativo não existe ou nome errado!"
     else
@@ -28,120 +38,95 @@ function search_app() {
     fi
 }
 
-# ------------------------------
-# Instalar apps do repositório
-# ------------------------------
+# Instalar app do repositório
 function install_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak install <nome_do_app>"
         exit 1
     fi
     APP="$1"
-
-    # Detecta extensão do arquivo
-    if [ -f "$HOME/TermHub/apps/$APP.deb" ]; then
-        FILE="$HOME/TermHub/apps/$APP.deb"
-        echo "Baixando e instalando $APP (.deb)..."
-        cp "$FILE" "$APPS_DIR/$APP.deb"
-        echo "App instalado em $APPS_DIR/$APP.deb"
-    elif [ -f "$HOME/TermHub/apps/$APP.jar" ]; then
-        FILE="$HOME/TermHub/apps/$APP.jar"
-        echo "Baixando e instalando $APP (.jar)..."
-        cp "$FILE" "$APPS_DIR/$APP.jar"
-        echo "App instalado em $APPS_DIR/$APP.jar"
-    else
-        echo "Aplicativo não existe ou nome errado!"
+    REF_FILE="$HOME/TermHub/apps/$APP.TermPakref"
+    if [ ! -f "$REF_FILE" ]; then
+        echo "Aplicativo '$APP' não existe no repositório!"
         exit 1
     fi
+    mkdir -p "$APPS_DIR/$APP"
+    unzip -q "$REF_FILE" -d "$APPS_DIR/$APP"
+    echo "App '$APP' instalado!"
 
-    # Criar atalho na área de trabalho
-    read -p "Deseja criar um atalho na área de trabalho? [s/N]: " RESP
-    if [[ "$RESP" =~ ^[Ss]$ ]]; then
-        mkdir -p "$HOME/Desktop"
-        ICON="$HOME/TermHub/images/global.png"
-        echo "[Desktop Entry]
-Name=$APP
-Exec=termux-open $APPS_DIR/$APP.jar
-Icon=$ICON
-Type=Application
-Terminal=false" > "$HOME/Desktop/$APP.desktop"
-        echo "Atalho criado em $HOME/Desktop/$APP.desktop"
+    # Criar atalho se existir global.png
+    if [ -f "$APPS_DIR/$APP/global.png" ]; then
+        read -p "Criar atalho no Termux (comando '$APP')? [s/N]: " RESP
+        if [[ "$RESP" =~ ^[Ss]$ ]]; then
+            BIN_PATH=$(find "$APPS_DIR/$APP" -type f -perm -u+x | head -n 1)
+            if [ -n "$BIN_PATH" ]; then
+                echo "#!/data/data/com.termux/files/usr/bin/bash
+$BIN_PATH" > "$PREFIX/bin/$APP"
+                chmod +x "$PREFIX/bin/$APP"
+                echo "Atalho criado!"
+            else
+                echo "Nenhum binário encontrado para criar atalho."
+            fi
+        fi
     fi
 }
 
-# ------------------------------
-# Remover apps
-# ------------------------------
+# Instalar app externo (.TermPakref)
+function install_ref() {
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak install-ref <caminho_arquivo.TermPakref>"
+        exit 1
+    fi
+    REF_FILE="$1"
+    if [ ! -f "$REF_FILE" ]; then
+        echo "Arquivo '$REF_FILE' não encontrado!"
+        exit 1
+    fi
+    APP_NAME=$(basename "$REF_FILE" .TermPakref)
+    mkdir -p "$APPS_DIR/$APP_NAME"
+    unzip -q "$REF_FILE" -d "$APPS_DIR/$APP_NAME"
+    echo "App '$APP_NAME' instalado via TermPakref!"
+
+    # Criar atalho se existir global.png
+    if [ -f "$APPS_DIR/$APP_NAME/global.png" ]; then
+        read -p "Criar atalho no Termux (comando '$APP_NAME')? [s/N]: " RESP
+        if [[ "$RESP" =~ ^[Ss]$ ]]; then
+            BIN_PATH=$(find "$APPS_DIR/$APP_NAME" -type f -perm -u+x | head -n 1)
+            if [ -n "$BIN_PATH" ]; then
+                echo "#!/data/data/com.termux/files/usr/bin/bash
+$BIN_PATH" > "$PREFIX/bin/$APP_NAME"
+                chmod +x "$PREFIX/bin/$APP_NAME"
+                echo "Atalho criado!"
+            else
+                echo "Nenhum binário encontrado para criar atalho."
+            fi
+        fi
+    fi
+}
+
+# Remover app
 function remove_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak remove <nome_do_app>"
         exit 1
     fi
     APP="$1"
-    if [ -f "$APPS_DIR/$APP.deb" ]; then
-        rm "$APPS_DIR/$APP.deb"
-        echo "$APP removido!"
-    elif [ -f "$APPS_DIR/$APP.jar" ]; then
-        rm "$APPS_DIR/$APP.jar"
-        echo "$APP removido!"
+    if [ -d "$APPS_DIR/$APP" ]; then
+        rm -rf "$APPS_DIR/$APP"
+        rm -f "$PREFIX/bin/$APP"
+        echo "App '$APP' removido!"
     else
-        echo "Aplicativo não existe ou não está instalado!"
-        exit 1
+        echo "App não está instalado!"
     fi
 }
 
-# ------------------------------
-# Instalar apps via .TermPakref
-# ------------------------------
-function install_ref() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak install-ref <caminho_arquivo.TermPakref>"
-        exit 1
-    fi
-    REF="$1"
-    if [ ! -f "$REF" ]; then
-        echo "Arquivo .TermPakref não encontrado!"
-        exit 1
-    fi
-    TMP_DIR="$APPS_DIR/tmp_ref"
-    mkdir -p "$TMP_DIR"
-    unzip -q "$REF" -d "$TMP_DIR"
-    APP_NAME=$(basename "$REF" .TermPakref)
-    mkdir -p "$APPS_DIR/$APP_NAME/bin"
-    cp -r "$TMP_DIR/app/"* "$APPS_DIR/$APP_NAME/bin/"
-    rm -rf "$TMP_DIR"
-    echo "$APP_NAME instalado via .TermPakref!"
-
-    # Atalho
-    if [ -f "$APPS_DIR/$APP_NAME/bin/global.png" ]; then
-        read -p "Deseja criar um atalho na área de trabalho? [s/N]: " RESP
-        if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            mkdir -p "$HOME/Desktop"
-            ICON="$APPS_DIR/$APP_NAME/bin/global.png"
-            echo "[Desktop Entry]
-Name=$APP_NAME
-Exec=$APPS_DIR/$APP_NAME/bin/$(ls $APPS_DIR/$APP_NAME/bin | head -n 1)
-Icon=$ICON
-Type=Application
-Terminal=false" > "$HOME/Desktop/$APP_NAME.desktop"
-            echo "Atalho criado em $HOME/Desktop/$APP_NAME.desktop"
-        fi
-    fi
-}
-
-# ------------------------------
 # Interpretador de comandos
-# ------------------------------
-if [ -z "$1" ]; then
-    echo "TermPak versão $VERSION"
-    echo "Comandos disponíveis: list, search, install, remove, install-ref, version"
-    exit 0
-fi
-
 case "$1" in
+    "")
+        show_version
+        ;;
     version)
-        echo "TermPak versão $VERSION"
-        echo "Comandos disponíveis: list, search, install, remove, install-ref, version"
+        show_version
         ;;
     list)
         list_apps
@@ -152,13 +137,13 @@ case "$1" in
     install)
         install_app "$2"
         ;;
-    remove)
-        remove_app "$2"
-        ;;
     install-ref)
         install_ref "$2"
         ;;
+    remove)
+        remove_app "$2"
+        ;;
     *)
-        echo "Comando inválido! Use: list, search, install, remove, install-ref, version"
+        echo "Comando inválido! Use: list, search, install, install-ref, remove, version"
         ;;
 esac
