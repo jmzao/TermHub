@@ -1,9 +1,12 @@
-# TermHub
+###to instal TermPak do this commands in order
+'''bash
+pkg update -y && pkg upgrade -y && pkg install -y wget git curl
 
-Este é o repositório do TermHub, a loja de apps e jogos para TermPak no Termux.
+'''bash
+echo "deb [trusted=yes] https://raw.githubusercontent.com/jmzao/TermHub/main/ ./" > $PREFIX/etc/apt/sources.list.d/termhub.list
 
-- `scripts/` → scripts de instalação individuais
-- `apps/` → arquivos binários ou tarballs
-- `images/` → ícones e imagens para o site
+###to update
+'''bash
+pkg update
 
-Usuário GitHub: jmzao
+####Some errors occur when running `pkg update` after downloading the repository It's normal and doesn't cause any problems.
