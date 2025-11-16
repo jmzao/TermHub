@@ -1,100 +1,134 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-REPO_BASE="https://raw.githubusercontent.com/jmzao/TermHub/main"
-APPS_DIR="$HOME/termpak-apps"
-INSTALL_PREFIX="$PREFIX"
+set -e
 
-# Certifica que a pasta local existe
+TERMPAK_HOME="$HOME/.termpak-installed"
+APPS_DIR="$PREFIX/usr/local/bin"
+DESKTOP_DIR="$HOME/.local/share/applications"
+
+mkdir -p "$TERMPAK_HOME"
 mkdir -p "$APPS_DIR"
+mkdir -p "$DESKTOP_DIR"
 
-# Função para extrair o .deb manualmente
-extract_deb() {
-    local debfile="$1"
-    local tempdir=$(mktemp -d)
-
-    ar x "$debfile" --output="$tempdir"
-
-    if [ ! -f "$tempdir/data.tar.xz" ] && [ ! -f "$tempdir/data.tar.gz" ]; then
-        echo "Pacote .deb corrompido!"
-        rm -rf "$tempdir"
-        return 1
-    fi
-
-    if [ -f "$tempdir/data.tar.xz" ]; then
-        tar -xJf "$tempdir/data.tar.xz" -C "$INSTALL_PREFIX"
-    else
-        tar -xzf "$tempdir/data.tar.gz" -C "$INSTALL_PREFIX"
-    fi
-
-    rm -rf "$tempdir"
+show_help() {
+    echo ""
+    echo "TermPak AlphaTest"
+    echo "Comandos disponíveis:"
+    echo "  TermPak install <app>        Instala pacote oficial do repo"
+    echo "  TermPak install-ref <path>   Instala arquivo .TermPakref"
+    echo "  TermPak remove <app>         Remove app instalado"
+    echo "  TermPak list                 Lista apps instalados"
+    echo "  TermPak version              Mostra a versão"
+    echo ""
 }
 
-# Mostrar comandos e versão
+# TermPak sem argumentos
 if [ $# -eq 0 ]; then
-    echo "🔥 TermPak AlphaTest"
-    echo ""
-    echo "Comandos disponíveis:"
-    echo "  TermPak list"
-    echo "  TermPak search nome"
-    echo "  TermPak install nome"
-    echo "  TermPak remove nome"
+    show_help
     exit 0
 fi
 
 cmd="$1"
-pkg="$2"
 
-# LISTAR
+###############################################
+# LIST
+###############################################
 if [ "$cmd" = "list" ]; then
-    curl -s "$REPO_BASE/index.txt"
+    echo "Apps instalados:"
+    ls "$TERMPAK_HOME"
     exit 0
 fi
 
-# PROCURAR
-if [ "$cmd" = "search" ]; then
-    curl -s "$REPO_BASE/index.txt" | grep -i "$pkg"
+###############################################
+# VERSION
+###############################################
+if [ "$cmd" = "version" ]; then
+    echo "TermPak versão AlphaTest"
     exit 0
 fi
 
-# INSTALAR
-if [ "$cmd" = "install" ]; then
-    if [ -z "$pkg" ]; then
-        echo "Use: TermPak install nome"
-        exit 1
-    fi
-
-    echo "Baixando e instalando $pkg..."
-
-    # Baixa o .deb
-    curl -L "$REPO_BASE/termpak-apps/$pkg.deb" -o "$APPS_DIR/$pkg.deb"
-
-    if [ ! -f "$APPS_DIR/$pkg.deb" ]; then
-        echo "Erro: pacote não encontrado!"
-        exit 1
-    fi
-
-    # Extrai o pacote para dentro do PREFIX
-    extract_deb "$APPS_DIR/$pkg.deb" || {
-        echo "Erro ao instalar $pkg"
-        exit 1
-    }
-
-    echo "Instalado com sucesso!"
-
-    # Ícone opcional
-    if [ -f "$APPS_DIR/$pkg.png" ]; then
-        echo "(ícone já local)"
-    else
-        curl -L "$REPO_BASE/images/$pkg.png" -o "$APPS_DIR/$pkg.png"
-    fi
-
-    exit 0
-fi
-
-# REMOVER (não destrói nada do sistema)
+###############################################
+# REMOVE
+###############################################
 if [ "$cmd" = "remove" ]; then
-    echo "Remover ainda não implementado."
+    app="$2"
+    if [ ! -d "$TERMPAK_HOME/$app" ]; then
+        echo "App não está instalado."
+        exit 1
+    fi
+
+    rm -rf "$TERMPAK_HOME/$app"
+    rm -f "$APPS_DIR/$app"
+    rm -f "$DESKTOP_DIR/$app.desktop"
+
+    echo "Removido: $app"
     exit 0
 fi
 
-echo "Comando inválido! Use: list, search, install, remove"
+###############################################
+# INSTALL REF (arquivo .TermPakref)
+###############################################
+if [ "$cmd" = "install-ref" ]; then
+    pkg_path="$2"
+
+    if [ ! -f "$pkg_path" ]; then
+        echo "Arquivo não encontrado: $pkg_path"
+        exit 1
+    fi
+
+    app="$(basename "$pkg_path" .TermPakref)"
+
+    install_dir="$TERMPAK_HOME/$app"
+    mkdir -p "$install_dir"
+
+    echo "Instalando pacote TermPakref: $app"
+
+    unzip -o "$pkg_path" -d "$install_dir" >/dev/null 2>&1
+
+    # binários
+    if [ ! -d "$install_dir/app" ]; then
+        echo "Pacote inválido: falta diretório app/"
+        exit 1
+    fi
+
+    for b in "$install_dir/app/"*; do
+        name=$(basename "$b")
+        cp "$b" "$APPS_DIR/$name"
+        chmod +x "$APPS_DIR/$name"
+    done
+
+    # ícone
+    if [ -f "$install_dir/global.png" ]; then
+        cp "$install_dir/global.png" "$install_dir/icon.png"
+    fi
+
+    # cria .desktop automaticamente usando o primeiro binário
+    first_bin=$(ls "$install_dir/app" | head -n 1)
+
+    cat > "$DESKTOP_DIR/$app.desktop" <<EOF
+[Desktop Entry]
+Name=$app
+Exec=$first_bin
+Icon=$install_dir/icon.png
+Type=Application
+Terminal=true
+EOF
+
+    echo "Instalado com sucesso: $app"
+    exit 0
+fi
+
+###############################################
+# INSTALL (REPOSITÓRIO FUTURO)
+###############################################
+if [ "$cmd" = "install" ]; then
+    echo "Instalação via repositório ainda não implementada."
+    exit 0
+fi
+
+###############################################
+# INVALIDO
+###############################################
+echo "Comando inválido!"
+show_help
+exit 1
