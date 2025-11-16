@@ -1,3 +1,11 @@
+
+#TermHub - Termux App Store
+# Developed by jmzao, a Brazilian developer
+# Browse, install, and manage apps directly from TermHub
+# Enjoy your Termux experience!
+
+
+
 # 🚀 TermPak Installation Guide
 
 This guide will help you install **TermPak** on Termux and set up the **TermHub** repository to manage apps.
