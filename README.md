@@ -1,4 +1,8 @@
 
+#descontinued
+
+
+ 
 #TermHub - Termux App Store
 # Developed by jmzao, a Brazilian developer
 # Browse, install, and manage apps directly from TermHub
