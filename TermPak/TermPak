@@ -7,30 +7,41 @@ TERMPAK_VERSION="AlphaTest"
 APPS_DIR="$HOME/termpak-apps"
 mkdir -p "$APPS_DIR"
 
+# URL base do repositório GitHub TermHub
+GITHUB_REPO="https://raw.githubusercontent.com/jmzao/TermHub/main/apps"
+
 # Mostrar versão e comandos
 function show_version() {
     echo "TermPak versão: $TERMPAK_VERSION"
     echo "Comandos disponíveis:"
     echo "  list           -> Listar apps disponíveis"
     echo "  search <app>   -> Buscar app pelo nome"
-    echo "  install <app>  -> Instalar app do repositório"
+    echo "  install <app>  -> Instalar app do repositório (local ou GitHub)"
     echo "  install-ref <arquivo.TermPakref> -> Instalar app externo"
     echo "  remove <app>   -> Remover app instalado"
 }
 
-# Listar apps do repositório
+# Listar apps do repositório local
 function list_apps() {
-    echo "Apps disponíveis no TermHub:"
-    ls -1 "$HOME/TermHub/apps" | sed 's/\.TermPakref//'
+    echo "Apps disponíveis no TermHub (local):"
+    if [ -d "$HOME/TermHub/apps" ]; then
+        ls -1 "$HOME/TermHub/apps" | sed 's/\.TermPakref//'
+    else
+        echo "Nenhum app local encontrado."
+    fi
 }
 
-# Buscar apps no repositório
+# Buscar apps no repositório local
 function search_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak search <nome_do_app>"
         exit 1
     fi
-    RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.TermPakref//')
+    if [ -d "$HOME/TermHub/apps" ]; then
+        RESULT=$(ls -1 "$HOME/TermHub/apps" | grep -i "$1" | sed 's/\.TermPakref//')
+    else
+        RESULT=""
+    fi
     if [ -z "$RESULT" ]; then
         echo "Aplicativo não existe ou nome errado!"
     else
@@ -38,37 +49,49 @@ function search_app() {
     fi
 }
 
-# Instalar app do repositório
-function install_app() {
-    if [ -z "$1" ]; then
-        echo "Uso: TermPak install <nome_do_app>"
-        exit 1
-    fi
-    APP="$1"
-    REF_FILE="$HOME/TermHub/apps/$APP.TermPakref"
-    if [ ! -f "$REF_FILE" ]; then
-        echo "Aplicativo '$APP' não existe no repositório!"
-        exit 1
-    fi
-    mkdir -p "$APPS_DIR/$APP"
-    unzip -q "$REF_FILE" -d "$APPS_DIR/$APP"
-    echo "App '$APP' instalado!"
-
-    # Criar atalho se existir global.png
-    if [ -f "$APPS_DIR/$APP/global.png" ]; then
-        read -p "Criar atalho no Termux (comando '$APP')? [s/N]: " RESP
+# Função para criar atalho
+function create_shortcut() {
+    local APP_NAME="$1"
+    if [ -f "$APPS_DIR/$APP_NAME/global.png" ]; then
+        read -p "Criar atalho no Termux (comando '$APP_NAME')? [s/N]: " RESP
         if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            BIN_PATH=$(find "$APPS_DIR/$APP" -type f -perm -u+x | head -n 1)
+            BIN_PATH=$(find "$APPS_DIR/$APP_NAME" -type f -perm -u+x | head -n 1)
             if [ -n "$BIN_PATH" ]; then
                 echo "#!/data/data/com.termux/files/usr/bin/bash
-$BIN_PATH" > "$PREFIX/bin/$APP"
-                chmod +x "$PREFIX/bin/$APP"
+$BIN_PATH" > "$PREFIX/bin/$APP_NAME"
+                chmod +x "$PREFIX/bin/$APP_NAME"
                 echo "Atalho criado!"
             else
                 echo "Nenhum binário encontrado para criar atalho."
             fi
         fi
     fi
+}
+
+# Instalar app do repositório (local ou GitHub)
+function install_app() {
+    if [ -z "$1" ]; then
+        echo "Uso: TermPak install <nome_do_app>"
+        exit 1
+    fi
+    APP="$1"
+    LOCAL_REF="$HOME/TermHub/apps/$APP.TermPakref"
+
+    # Se não existir local, tenta baixar do GitHub
+    if [ ! -f "$LOCAL_REF" ]; then
+        mkdir -p "$HOME/TermHub/apps"
+        echo "Baixando $APP do GitHub..."
+        wget -q "$GITHUB_REPO/$APP.TermPakref" -O "$LOCAL_REF"
+        if [ $? -ne 0 ]; then
+            echo "Falha ao baixar $APP do GitHub."
+            exit 1
+        fi
+    fi
+
+    mkdir -p "$APPS_DIR/$APP"
+    unzip -q "$LOCAL_REF" -d "$APPS_DIR/$APP"
+    echo "App '$APP' instalado!"
+    create_shortcut "$APP"
 }
 
 # Instalar app externo (.TermPakref)
@@ -86,22 +109,7 @@ function install_ref() {
     mkdir -p "$APPS_DIR/$APP_NAME"
     unzip -q "$REF_FILE" -d "$APPS_DIR/$APP_NAME"
     echo "App '$APP_NAME' instalado via TermPakref!"
-
-    # Criar atalho se existir global.png
-    if [ -f "$APPS_DIR/$APP_NAME/global.png" ]; then
-        read -p "Criar atalho no Termux (comando '$APP_NAME')? [s/N]: " RESP
-        if [[ "$RESP" =~ ^[Ss]$ ]]; then
-            BIN_PATH=$(find "$APPS_DIR/$APP_NAME" -type f -perm -u+x | head -n 1)
-            if [ -n "$BIN_PATH" ]; then
-                echo "#!/data/data/com.termux/files/usr/bin/bash
-$BIN_PATH" > "$PREFIX/bin/$APP_NAME"
-                chmod +x "$PREFIX/bin/$APP_NAME"
-                echo "Atalho criado!"
-            else
-                echo "Nenhum binário encontrado para criar atalho."
-            fi
-        fi
-    fi
+    create_shortcut "$APP_NAME"
 }
 
 # Remover app
