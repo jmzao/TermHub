@@ -14,17 +14,26 @@ show_help() {
     echo ""
     echo "TermPak AlphaTest"
     echo "Comandos disponíveis:"
+    echo "  TermPak list                 Lista apps instalados"
+    echo "  TermPak search <nome>        (reservado)"
     echo "  TermPak install <app>        Instala pacote oficial do repo"
     echo "  TermPak install-ref <path>   Instala arquivo .TermPakref"
     echo "  TermPak remove <app>         Remove app instalado"
-    echo "  TermPak list                 Lista apps instalados"
     echo "  TermPak version              Mostra a versão"
     echo ""
 }
 
-# TermPak sem argumentos
+# Sem argumentos
 if [ $# -eq 0 ]; then
     show_help
+    exit 0
+fi
+
+cmd="$1"
+
+# VERSION
+if [ "$cmd" = "version" ]; then
+    echo "TermPak versão AlphaTest"
     exit 0
 fi
 
