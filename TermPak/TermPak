@@ -6,7 +6,7 @@ REPO_URL="https://raw.githubusercontent.com/jmzao/TermHub/main/apps"
 
 mkdir -p "$APPS_DIR"
 
-function show_version() {
+show_version() {
     echo "TermPak versão: $TERMPAK_VERSION"
     echo "Comandos disponíveis:"
     echo "  list           -> Listar apps disponíveis"
@@ -16,25 +16,20 @@ function show_version() {
     echo "  remove <app>   -> Remover app instalado"
 }
 
-function list_apps() {
+list_apps() {
     echo "Apps disponíveis no TermHub:"
-    curl -s "$REPO_URL/index.txt" | sed 's/\.TermPakref//'
+    wget -q -O - "$REPO_URL/index.txt"
 }
 
-function search_app() {
+search_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak search <nome_do_app>"
         exit 1
     fi
-    RESULT=$(curl -s "$REPO_URL/index.txt" | grep -i "$1" | sed 's/\.TermPakref//')
-    if [ -z "$RESULT" ]; then
-        echo "Aplicativo não existe ou nome errado!"
-    else
-        echo "$RESULT"
-    fi
+    wget -q -O - "$REPO_URL/index.txt" | grep -i "$1"
 }
 
-function install_app() {
+install_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak install <nome_do_app>"
         exit 1
@@ -42,45 +37,33 @@ function install_app() {
     APP="$1"
     REF_FILE="$APPS_DIR/$APP.TermPakref"
 
-    echo "Baixando $APP..."
-    wget -q "$REPO_URL/$APP.TermPakref" -O "$REF_FILE"
-
-    if [ ! -f "$REF_FILE" ]; then
-        echo "Erro ao baixar $APP!"
-        exit 1
-    fi
+    # Baixar .TermPakref
+    echo "Baixando $APP.TermPakref..."
+    wget -q -O "$REF_FILE" "$REPO_URL/$APP.TermPakref" || { echo "Erro ao baixar o app!"; exit 1; }
 
     mkdir -p "$APPS_DIR/$APP"
     unzip -q "$REF_FILE" -d "$APPS_DIR/$APP"
     echo "App '$APP' instalado!"
 
+    # Criar atalho se houver global.png
     if [ -f "$APPS_DIR/$APP/global.png" ]; then
         read -p "Criar atalho no Termux (comando '$APP')? [s/N]: " RESP
         if [[ "$RESP" =~ ^[Ss]$ ]]; then
             BIN_PATH=$(find "$APPS_DIR/$APP" -type f -perm -u+x | head -n 1)
-            if [ -n "$BIN_PATH" ]; then
-                echo "#!/data/data/com.termux/files/usr/bin/bash
-$BIN_PATH" > "$PREFIX/bin/$APP"
-                chmod +x "$PREFIX/bin/$APP"
-                echo "Atalho criado!"
-            else
-                echo "Nenhum binário encontrado para criar atalho."
-            fi
+            [ -n "$BIN_PATH" ] && echo "#!/data/data/com.termux/files/usr/bin/bash
+$BIN_PATH" > "$PREFIX/bin/$APP" && chmod +x "$PREFIX/bin/$APP" && echo "Atalho criado!"
         fi
     fi
 }
 
-function install_ref() {
+install_ref() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak install-ref <caminho_arquivo.TermPakref>"
         exit 1
     fi
     REF_FILE="$1"
-    if [ ! -f "$REF_FILE" ]; then
-        echo "Arquivo '$REF_FILE' não encontrado!"
-        exit 1
-    fi
     APP_NAME=$(basename "$REF_FILE" .TermPakref)
+
     mkdir -p "$APPS_DIR/$APP_NAME"
     unzip -q "$REF_FILE" -d "$APPS_DIR/$APP_NAME"
     echo "App '$APP_NAME' instalado via TermPakref!"
@@ -89,19 +72,13 @@ function install_ref() {
         read -p "Criar atalho no Termux (comando '$APP_NAME')? [s/N]: " RESP
         if [[ "$RESP" =~ ^[Ss]$ ]]; then
             BIN_PATH=$(find "$APPS_DIR/$APP_NAME" -type f -perm -u+x | head -n 1)
-            if [ -n "$BIN_PATH" ]; then
-                echo "#!/data/data/com.termux/files/usr/bin/bash
-$BIN_PATH" > "$PREFIX/bin/$APP_NAME"
-                chmod +x "$PREFIX/bin/$APP_NAME"
-                echo "Atalho criado!"
-            else
-                echo "Nenhum binário encontrado para criar atalho."
-            fi
+            [ -n "$BIN_PATH" ] && echo "#!/data/data/com.termux/files/usr/bin/bash
+$BIN_PATH" > "$PREFIX/bin/$APP_NAME" && chmod +x "$PREFIX/bin/$APP_NAME" && echo "Atalho criado!"
         fi
     fi
 }
 
-function remove_app() {
+remove_app() {
     if [ -z "$1" ]; then
         echo "Uso: TermPak remove <nome_do_app>"
         exit 1
@@ -118,10 +95,7 @@ function remove_app() {
 }
 
 case "$1" in
-    "")
-        show_version
-        ;;
-    version)
+    ""|version)
         show_version
         ;;
     list)
